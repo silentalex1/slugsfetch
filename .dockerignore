@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.env
+.env.local
+server/bin
+server/tmp
+server/accounts.json
+server/donations.jsonl
+*.partial
+tsconfig.tsbuildinfo

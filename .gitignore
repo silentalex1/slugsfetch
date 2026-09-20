@@ -1,0 +1,12 @@
+﻿node_modules
+dist
+server/bin/*
+!server/bin/.gitkeep
+server/tmp/*
+!server/tmp/.gitkeep
+*.partial
+.env
+.env.local
+server/donations.jsonl
+server/accounts.json
+tsconfig.tsbuildinfo
