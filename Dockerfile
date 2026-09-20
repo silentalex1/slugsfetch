@@ -20,7 +20,6 @@ RUN mkdir -p server/bin/ffmpeg server/tmp \
 ENV NODE_ENV=production
 ENV SLUGFETCH_HOST=0.0.0.0
 ENV SLUGFETCH_PORT=8080
-ENV SLUGFETCH_PUBLIC_URL=https://slugfetch.asdwwas233.workers.dev
 
 EXPOSE 8080
 CMD ["node", "server/index.js"]
