@@ -346,7 +346,27 @@ function attemptMatrix(platform, cookieArgs, url) {
   }
 }
 
-function qualityToFormat(mode, quality, format, bitrate, hasFfmpeg, container) {
+const AUDIO_CODECS = {
+  mp3: "mp3",
+  m4a: "m4a",
+  aac: "aac",
+  opus: "opus",
+  ogg: "vorbis",
+  wav: "wav",
+  flac: "flac",
+};
+
+const AUDIO_EXTS = {
+  mp3: "mp3",
+  m4a: "m4a",
+  aac: "m4a",
+  opus: "opus",
+  vorbis: "ogg",
+  wav: "wav",
+  flac: "flac",
+};
+
+export function qualityToFormat(mode, quality, format, bitrate, hasFfmpeg, container, mobile) {
   const q = String(quality || "1080").replace(/p$/i, "");
   const height =
     q === "8k" || q === "4320" ? 4320 :
@@ -355,16 +375,22 @@ function qualityToFormat(mode, quality, format, bitrate, hasFfmpeg, container) {
   const br = String(parseInt(String(bitrate || "128"), 10) || 128);
 
   if (mode === "audio") {
-    const af = !format || format === "best" ? "mp3" : format;
+    const af = mobile ? "m4a" : !format || format === "best" ? "mp3" : format;
+
     if (hasFfmpeg) {
-      const out = af === "flac" ? "flac" : af === "wav" ? "wav" : af === "opus" ? "opus" : af === "ogg" ? "vorbis" : "mp3";
-      const ext = af === "ogg" ? "ogg" : out === "vorbis" ? "ogg" : out === "mp3" ? "mp3" : out;
-      return {
-        format: "bestaudio/best",
-        post: ["-x", "--audio-format", out === "vorbis" ? "vorbis" : out, "--audio-quality", af === "wav" || af === "flac" ? "0" : br + "K"],
-        ext: ext === "vorbis" ? "ogg" : ext,
-      };
+      const codec = AUDIO_CODECS[af] || "mp3";
+      const ext = AUDIO_EXTS[codec] || "mp3";
+      const lossless = codec === "wav" || codec === "flac";
+
+      const post = ["-x", "--audio-format", codec, "--audio-quality", lossless ? "0" : `${br}K`];
+      if (mobile) {
+        post.push("--postprocessor-args", "ffmpeg:-ar 44100 -ac 2 -movflags +faststart");
+      }
+      post.push("--embed-metadata");
+
+      return { format: "bestaudio/best", post, ext };
     }
+
     return {
       format: "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best",
       post: [],
@@ -750,8 +776,9 @@ export function runDownload(opts) {
     }
     const hasFfmpeg = !!ffmpegPath;
     const platform = detectPlatform(url);
-    const effectiveMode = AUDIO_ONLY_PLATFORMS.has(platform) && mode !== "mute" ? "audio" : mode;
-    const fmt = qualityToFormat(effectiveMode, quality, format, bitrate, hasFfmpeg, opts.container);
+    const mobile = !!opts.mobile;
+    const effectiveMode = mobile || (AUDIO_ONLY_PLATFORMS.has(platform) && mode !== "mute") ? "audio" : mode;
+    const fmt = qualityToFormat(effectiveMode, quality, format, bitrate, hasFfmpeg, opts.container, mobile);
 
     const prefix = jobId || `dl_${Date.now()}`;
     const template = outTemplate || join(TMP_DIR, `${prefix}__%(title).100B.%(ext)s`);

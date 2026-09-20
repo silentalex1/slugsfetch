@@ -6,6 +6,7 @@ export interface DownloadRequest {
   quality?: string;
   format?: string;
   container?: string;
+  mobile?: boolean;
   bitrate?: string;
   startTime?: string;
   endTime?: string;
@@ -279,6 +280,7 @@ export async function downloadMedia(
         quality: req.quality,
         format: req.format,
         container: req.container,
+        mobile: req.mobile,
         bitrate: req.bitrate,
         startTime: req.startTime,
         endTime: req.endTime,

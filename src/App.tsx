@@ -57,7 +57,7 @@ type Theme = "auto" | "light" | "dark";
 type Quality = "8k" | "4k" | "1440p" | "1080p" | "720p" | "480p" | "360p" | "240p" | "144p";
 type Codec = "h264+aac" | "av1+opus" | "vp9+opus";
 type Container = "auto" | "mp4" | "webm" | "mkv";
-type AudioFormat = "best" | "mp3" | "ogg" | "wav" | "opus" | "flac";
+type AudioFormat = "best" | "mp3" | "m4a" | "ogg" | "wav" | "opus" | "flac";
 type Bitrate = "320kb/s" | "256kb/s" | "128kb/s" | "96kb/s" | "64kb/s" | "8kb/s";
 type FilenameStyle = "classic" | "basic" | "pretty" | "nerdy";
 type SavingMethod = "ask" | "download" | "share" | "copy";
@@ -252,6 +252,7 @@ function App() {
   const [quality, setQuality] = useState<Quality>("1080p");
   const [audioFmt, setAudioFmt] = useState<AudioFormat>("mp3");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [mobileAudio, setMobileAudio] = useState(false);
   const [trimStart, setTrimStart] = useState("");
   const [trimEnd, setTrimEnd] = useState("");
   const [wantSubs, setWantSubs] = useState(false);
@@ -465,6 +466,7 @@ function App() {
               quality: next.quality || quality,
               format: next.format || audioFmt,
               container: settings.youtubeContainer,
+              mobile: next.mobile ?? mobileAudio,
               bitrate: settings.audioBitrate,
               startTime: trimStart.trim() || undefined,
               endTime: trimEnd.trim() || undefined,
@@ -555,6 +557,7 @@ function App() {
     settings.preferredSubtitle,
     settings.savingMethod,
     settings.youtubeContainer,
+    mobileAudio,
     trimStart,
     trimEnd,
     wantSubs,
@@ -581,6 +584,7 @@ function App() {
       mode,
       quality,
       format: audioFmt,
+      mobile: mobileAudio,
       ...overrides,
     };
     setQueue((q) => {
@@ -1232,7 +1236,7 @@ function App() {
                       onChange={(e) => setAudioFmt(e.target.value as AudioFormat)}
                       className="h-8 px-2 rounded-lg text-xs bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700"
                     >
-                      {(["best", "mp3", "ogg", "wav", "opus", "flac"] as AudioFormat[]).map((f) => (
+                      {(["best", "mp3", "m4a", "ogg", "wav", "opus", "flac"] as AudioFormat[]).map((f) => (
                         <option key={f} value={f}>{f}</option>
                       ))}
                     </select>
@@ -1248,8 +1252,31 @@ function App() {
                   </>
                 )}
                 <button
+                  onClick={() => {
+                    const next = !mobileAudio;
+                    setMobileAudio(next);
+                    if (next) {
+                      setMode("audio");
+                      setAudioFmt("m4a");
+                    }
+                  }}
+                  title="aac in an m4a container at 44.1 kHz stereo, what iphones and android players expect"
+                  className={cn(
+                    "h-8 px-2.5 rounded-lg text-xs inline-flex items-center gap-1.5 transition-all duration-200",
+                    mobileAudio
+                      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-500/40"
+                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                  )}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <rect x="7" y="2.5" width="10" height="19" rx="2.5" strokeWidth={2} />
+                    <path strokeLinecap="round" strokeWidth={2} d="M11 18.5h2" />
+                  </svg>
+                  mobile
+                </button>
+                <button
                   onClick={() => setShowAdvanced((s) => !s)}
-                  className="h-8 px-2.5 rounded-lg text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                  className="h-8 px-2.5 rounded-lg text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
                 >
                   {showAdvanced ? "hide options" : "clip · subs"}
                 </button>

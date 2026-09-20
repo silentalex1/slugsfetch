@@ -26,6 +26,7 @@ export interface QueueItem {
   localFile?: File;
   localName?: string;
   remuxTarget?: string;
+  mobile?: boolean;
   saved?: boolean;
   mode?: "auto" | "audio" | "mute";
   quality?: string;
