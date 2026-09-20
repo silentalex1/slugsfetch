@@ -7,7 +7,18 @@ import { rmSync, existsSync, readFileSync } from "node:fs";
 const STORE = join(tmpdir(), `slugfetch-accounts-test-${Date.now()}.json`);
 process.env.SLUGFETCH_ACCOUNTS = STORE;
 
-const { claimAccount, authenticate, grantPremium, publicAccount, findAccount, validateCredentials } = await import(
+const {
+  claimAccount,
+  authenticate,
+  grantPremium,
+  publicAccount,
+  findAccount,
+  validateCredentials,
+  getHistory,
+  mergeHistory,
+  clearHistory,
+  MAX_HISTORY,
+} = await import(
   "./accounts.js"
 );
 const { qualifiesForPremium, PREMIUM_MIN_AMOUNT, PRESET_AMOUNTS } = await import("./payments.js");
@@ -87,4 +98,77 @@ test("granting premium records the payment", () => {
 
 test("granting premium to a missing account is a no-op", () => {
   assert.equal(grantPremium("does_not_exist", { amount: 1000 }), null);
+});
+
+test("history saves onto the account and survives a fresh read", async () => {
+  await claimAccount("hist_one", "historypassword1");
+  assert.deepEqual(getHistory("hist_one"), []);
+
+  mergeHistory("hist_one", [
+    { id: "a", name: "first", url: "https://x.test/a", platform: "youtube", filename: "a.mp3", at: 1000, size: 10 },
+    { id: "b", name: "second", url: "https://x.test/b", platform: "vimeo", filename: "b.mp4", at: 2000 },
+  ]);
+
+  const saved = getHistory("hist_one");
+  assert.equal(saved.length, 2);
+  assert.equal(saved[0].name, "second");
+});
+
+test("merging keeps the newest entry per url instead of duplicating", () => {
+  mergeHistory("hist_one", [
+    { id: "c", name: "first renamed", url: "https://x.test/a", platform: "youtube", filename: "a.mp3", at: 9000 },
+  ]);
+  const saved = getHistory("hist_one");
+  assert.equal(saved.length, 2);
+  assert.equal(saved[0].name, "first renamed");
+  assert.equal(saved.filter((h) => h.url === "https://x.test/a").length, 1);
+});
+
+test("history entries are sanitized and capped", () => {
+  const junk = [
+    null,
+    undefined,
+    42,
+    { nothing: "useful" },
+    { name: "x".repeat(5000), url: "https://x.test/long", at: "not a number", evil: "<script>" },
+  ];
+  mergeHistory("hist_one", junk);
+
+  const saved = getHistory("hist_one");
+  const long = saved.find((h) => h.url === "https://x.test/long");
+  assert.equal(long.name.length, 200);
+  assert.equal(Number.isFinite(long.at), true);
+  assert.equal("evil" in long, false);
+  assert.deepEqual(Object.keys(long).sort(), ["at", "filename", "id", "name", "platform", "size", "url"]);
+
+  const flood = Array.from({ length: MAX_HISTORY + 120 }, (_, i) => ({
+    id: `f${i}`,
+    name: `flood ${i}`,
+    url: `https://x.test/f${i}`,
+    platform: "youtube",
+    filename: `f${i}.mp3`,
+    at: 100000 + i,
+  }));
+  mergeHistory("hist_one", flood);
+  assert.equal(getHistory("hist_one").length, MAX_HISTORY);
+});
+
+test("history is per account and clearing one leaves the other", async () => {
+  await claimAccount("hist_two", "historypassword2");
+  mergeHistory("hist_two", [
+    { id: "z", name: "theirs", url: "https://x.test/z", platform: "reddit", filename: "z.mp4", at: 500 },
+  ]);
+
+  assert.equal(getHistory("hist_two").length, 1);
+  assert.equal(getHistory("hist_one").length, MAX_HISTORY);
+
+  clearHistory("hist_two");
+  assert.deepEqual(getHistory("hist_two"), []);
+  assert.equal(getHistory("hist_one").length, MAX_HISTORY);
+});
+
+test("history calls against a missing account do not throw", () => {
+  assert.equal(mergeHistory("ghost", [{ name: "x", url: "https://x.test/x", at: 1 }]), null);
+  assert.equal(clearHistory("ghost"), null);
+  assert.deepEqual(getHistory("ghost"), []);
 });

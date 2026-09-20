@@ -30,6 +30,8 @@ import {
   fetchAccount,
   loadSession,
   saveSession,
+  pushHistory as syncHistoryToAccount,
+  clearRemoteHistory,
   formatBytes,
   formatSpeed,
   formatEta,
@@ -292,6 +294,8 @@ function App() {
   const batchFileRef = useRef<HTMLInputElement>(null);
   const cookieFileRef = useRef<HTMLInputElement>(null);
   const queueRef = useRef<QueueItem[]>([]);
+  const historyRef = useRef<HistoryItem[]>([]);
+  const syncedRef = useRef<string>("");
   const queueLock = useRef(false);
   const abortRef = useRef<Map<string, AbortController>>(new Map());
   const pauseRef = useRef<Set<string>>(new Set());
@@ -334,6 +338,7 @@ function App() {
   }, [bg]);
 
   useEffect(() => {
+    historyRef.current = history;
     localStorage.setItem("slugfetch-history", JSON.stringify(history.slice(0, 100)));
   }, [history]);
 
@@ -747,19 +752,42 @@ function App() {
     const session = loadSession();
     if (!session) return;
     let alive = true;
-    void fetchAccount(session).then((a) => {
+    void fetchAccount(session).then(async (a) => {
       if (!alive) return;
-      if (a) {
-        setAccount(a);
-        setAccountName(a.username);
-      } else {
+      if (!a) {
         saveSession(null);
+        return;
+      }
+      setAccount(a);
+      setAccountName(a.username);
+
+      const merged = await syncHistoryToAccount(session, historyRef.current);
+      if (alive && merged) {
+        syncedRef.current = JSON.stringify(merged);
+        setHistory(merged);
       }
     });
     return () => {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!account) return;
+    const session = loadSession();
+    if (!session) return;
+
+    const snapshot = JSON.stringify(history);
+    if (snapshot === syncedRef.current) return;
+
+    const timer = setTimeout(() => {
+      void syncHistoryToAccount(session, history).then((merged) => {
+        if (merged) syncedRef.current = JSON.stringify(merged);
+      });
+    }, 1200);
+
+    return () => clearTimeout(timer);
+  }, [history, account]);
 
   useEffect(() => {
     if (page !== "donate") return;
@@ -798,6 +826,12 @@ function App() {
     queueRef.current = [];
     setHistory([]);
     setFiles([]);
+
+    const session = loadSession();
+    if (session) {
+      syncedRef.current = "[]";
+      void clearRemoteHistory(session);
+    }
 
     if (mode === "reset") {
       setSettings(defaultSettings);
@@ -845,8 +879,15 @@ function App() {
       return;
     }
 
-    saveSession({ username: claimed.account.username, token: claimed.token });
+    const session = { username: claimed.account.username, token: claimed.token };
+    saveSession(session);
     setAccount(claimed.account);
+
+    const merged = await syncHistoryToAccount(session, historyRef.current);
+    if (merged) {
+      syncedRef.current = JSON.stringify(merged);
+      setHistory(merged);
+    }
 
     const res = await startDonation({
       amount: checkoutAmount,
@@ -1412,13 +1453,19 @@ function App() {
 
         {page === "history" && (
           <div className="max-w-2xl mx-auto py-12 px-6">
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-2">
               <h1 className="text-2xl font-semibold">history</h1>
               {history.length > 0 && (
                 <button
                   onClick={() => {
                     setHistory([]);
                     localStorage.removeItem("slugfetch-history");
+                    const session = loadSession();
+                    if (session) {
+                      syncedRef.current = "[]";
+                      void clearRemoteHistory(session);
+                      toast("history cleared on this device and your account");
+                    }
                   }}
                   className="text-xs text-red-500 hover:underline"
                 >
@@ -1426,6 +1473,25 @@ function App() {
                 </button>
               )}
             </div>
+            <p className="text-xs text-zinc-500 mb-8 flex items-center gap-1.5">
+              {account ? (
+                <>
+                  <svg className="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z"
+                    />
+                  </svg>
+                  saved to <span className="text-zinc-700 dark:text-zinc-300 font-medium">{account.username}</span>, it
+                  follows you to any browser you sign in on
+                </>
+              ) : (
+                <>this device only. it is saved to your account once you make one, and survives a cache clear.</>
+              )}
+            </p>
+
             {history.length === 0 ? (
               <p className="text-sm text-zinc-500 text-center py-16">no downloads yet. successful saves appear here.</p>
             ) : (

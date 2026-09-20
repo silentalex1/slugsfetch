@@ -33,7 +33,15 @@ import {
   rateLimited,
   qualifiesForPremium,
 } from "./payments.js";
-import { claimAccount, authenticate, grantPremium, publicAccount } from "./accounts.js";
+import {
+  claimAccount,
+  authenticate,
+  grantPremium,
+  publicAccount,
+  getHistory,
+  mergeHistory,
+  clearHistory,
+} from "./accounts.js";
 
 try {
   process.loadEnvFile(join(dirname(fileURLToPath(import.meta.url)), "..", ".env"));
@@ -66,7 +74,7 @@ function log(level, reqId, msg, extra) {
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept, X-Request-Id");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept, X-Request-Id, X-Account-Token");
   res.setHeader("Access-Control-Expose-Headers", "X-Request-Id");
 }
 
@@ -597,6 +605,30 @@ async function handle(req, res) {
         },
         reqId
       );
+    }
+
+    const historyMatch = path.match(/^\/api\/account\/([^/]+)\/history$/);
+    if (historyMatch) {
+      const token = String(req.headers["x-account-token"] || "");
+      const account = authenticate(decodeURIComponent(historyMatch[1]), token);
+      if (!account) return json(res, 401, { ok: false, error: "not signed in" }, reqId);
+
+      if (req.method === "GET") {
+        return json(res, 200, { ok: true, history: getHistory(account.username) }, reqId);
+      }
+
+      if (req.method === "POST") {
+        const body = await readBody(req);
+        const merged = mergeHistory(account.username, body.history);
+        log("info", reqId, "history synced", { username: account.username, entries: merged?.length ?? 0 });
+        return json(res, 200, { ok: true, history: merged || [] }, reqId);
+      }
+
+      if (req.method === "DELETE") {
+        clearHistory(account.username);
+        log("info", reqId, "history cleared", { username: account.username });
+        return json(res, 200, { ok: true, history: [] }, reqId);
+      }
     }
 
     const accountMatch = path.match(/^\/api\/account\/([^/]+)$/);

@@ -444,6 +444,59 @@ export async function fetchAccount(session: StoredSession): Promise<Account | nu
   }
 }
 
+export interface RemoteHistoryItem {
+  id: string;
+  name: string;
+  url: string;
+  platform: string;
+  filename: string;
+  at: number;
+  size?: number;
+}
+
+export async function fetchHistory(session: StoredSession): Promise<RemoteHistoryItem[] | null> {
+  try {
+    const res = await requestApi(`/account/${encodeURIComponent(session.username)}/history`, {
+      headers: { "X-Account-Token": session.token },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.ok && Array.isArray(data.history) ? data.history : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function pushHistory(
+  session: StoredSession,
+  history: RemoteHistoryItem[]
+): Promise<RemoteHistoryItem[] | null> {
+  try {
+    const res = await requestApi(`/account/${encodeURIComponent(session.username)}/history`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Account-Token": session.token },
+      body: JSON.stringify({ history }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.ok && Array.isArray(data.history) ? data.history : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearRemoteHistory(session: StoredSession): Promise<boolean> {
+  try {
+    const res = await requestApi(`/account/${encodeURIComponent(session.username)}/history`, {
+      method: "DELETE",
+      headers: { "X-Account-Token": session.token },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function startDonation(opts: {
   amount: number;
   currency?: string;

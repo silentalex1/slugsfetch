@@ -139,3 +139,70 @@ export function grantPremium(username, detail) {
 export function accountCount() {
   return Object.keys(load()).length;
 }
+
+export const MAX_HISTORY = 200;
+
+function cleanEntry(raw) {
+  if (!raw || typeof raw !== "object") return null;
+
+  const str = (v, max) => {
+    const s = String(v ?? "").trim();
+    return s ? s.slice(0, max) : "";
+  };
+
+  const url = str(raw.url, 2048);
+  const name = str(raw.name, 200);
+  const filename = str(raw.filename, 300);
+  if (!name && !filename && !url) return null;
+
+  const at = Number(raw.at);
+  const size = Number(raw.size);
+
+  return {
+    id: str(raw.id, 64) || randomBytes(8).toString("hex"),
+    name: name || filename || url,
+    url,
+    platform: str(raw.platform, 40) || "unknown",
+    filename: filename || name,
+    at: Number.isFinite(at) && at > 0 ? at : Date.now(),
+    size: Number.isFinite(size) && size >= 0 ? size : undefined,
+  };
+}
+
+function dedupe(entries) {
+  const byKey = new Map();
+  for (const entry of entries) {
+    const key = entry.url ? `u:${entry.url}` : `i:${entry.id}`;
+    const existing = byKey.get(key);
+    if (!existing || entry.at > existing.at) byKey.set(key, entry);
+  }
+  return [...byKey.values()].sort((a, b) => b.at - a.at).slice(0, MAX_HISTORY);
+}
+
+export function getHistory(username) {
+  const account = findAccount(username);
+  return Array.isArray(account?.history) ? account.history : [];
+}
+
+export function mergeHistory(username, incoming) {
+  const account = findAccount(username);
+  if (!account) return null;
+
+  const list = Array.isArray(incoming) ? incoming : [];
+  const cleaned = list.slice(0, MAX_HISTORY * 2).map(cleanEntry).filter(Boolean);
+  const merged = dedupe([...cleaned, ...(Array.isArray(account.history) ? account.history : [])]);
+
+  account.history = merged;
+  account.historyUpdatedAt = Date.now();
+  persist();
+  return merged;
+}
+
+export function clearHistory(username) {
+  const account = findAccount(username);
+  if (!account) return null;
+  account.history = [];
+  account.historyUpdatedAt = Date.now();
+  persist();
+  return [];
+}
