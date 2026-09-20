@@ -157,6 +157,46 @@ test("webhook rejects a forged signature", () => {
   assert.throws(() => handleWebhook(Buffer.from(payload), ""), /signature|header/i);
 });
 
+test("live mode refuses to redirect real payments to a non https address", async () => {
+  const savedKey = process.env.STRIPE_SECRET_KEY;
+  const savedHook = process.env.STRIPE_WEBHOOK_SECRET;
+  const savedUrl = process.env.SLUGFETCH_PUBLIC_URL;
+
+  process.env.STRIPE_SECRET_KEY = ["sk", "live", "notarealkeyforthistestonly"].join("_");
+  process.env.STRIPE_WEBHOOK_SECRET = "";
+  process.env.SLUGFETCH_PUBLIC_URL = "http://127.0.0.1:5173";
+
+  try {
+    const status = paymentsStatus();
+    assert.equal(status.mode, "live");
+    assert.equal(status.live, true);
+    assert.equal(status.ready, false);
+    assert.equal(status.warnings.length, 3);
+    assert.match(status.warnings.join(" "), /https/);
+
+    received.length = 0;
+    await assert.rejects(() => createDonationSession({ amount: 1000 }), /https/);
+    assert.equal(received.length, 0, "a misconfigured live session must never reach stripe");
+
+    process.env.SLUGFETCH_PUBLIC_URL = "https://slugfetch.example";
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_something";
+    const fixed = paymentsStatus();
+    assert.equal(fixed.ready, true);
+    assert.deepEqual(fixed.warnings, []);
+  } finally {
+    process.env.STRIPE_SECRET_KEY = savedKey;
+    process.env.STRIPE_WEBHOOK_SECRET = savedHook;
+    process.env.SLUGFETCH_PUBLIC_URL = savedUrl;
+  }
+});
+
+test("test mode reports itself as not live", () => {
+  const status = paymentsStatus();
+  assert.equal(status.mode, "test");
+  assert.equal(status.live, false);
+  assert.deepEqual(status.warnings, []);
+});
+
 test("webhook accepts a correctly signed event", () => {
   const payload = JSON.stringify({
     id: "evt_2",

@@ -12,7 +12,8 @@
     "start": "node server/index.js",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "test": "node --test server/*.test.mjs"
+    "test": "node --test server/*.test.mjs",
+    "stripe:setup": "node scripts/stripe-setup.mjs"
   },
   "dependencies": {
     "@cloudflare/containers": "^0.3.7",

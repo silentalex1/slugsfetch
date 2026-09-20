@@ -56,11 +56,39 @@ export function stripeClient() {
   return client;
 }
 
+export function liveWarnings() {
+  const key = readKey();
+  if (!key || !key.includes("_live_")) return [];
+
+  const warnings = [];
+  const base = publicUrl();
+
+  if (!base.startsWith("https://")) {
+    warnings.push(
+      `SLUGFETCH_PUBLIC_URL is ${base}. Stripe rejects live payments that redirect back to a non https address. Point it at your real domain.`
+    );
+  }
+  if (/localhost|127\.0\.0\.1|0\.0\.0\.0/.test(base)) {
+    warnings.push("SLUGFETCH_PUBLIC_URL still points at this machine, so donors would be sent back to their own computer.");
+  }
+  if (!String(process.env.STRIPE_WEBHOOK_SECRET || "").trim()) {
+    warnings.push(
+      "STRIPE_WEBHOOK_SECRET is unset. Payments still work, but a donation completed after the donor closes the tab will not be recorded."
+    );
+  }
+  return warnings;
+}
+
 export function paymentsStatus() {
   const key = readKey();
+  const mode = key ? (key.includes("_live_") ? "live" : "test") : null;
+  const warnings = liveWarnings();
   return {
     configured: !!key,
-    mode: key ? (key.includes("_live_") ? "live" : "test") : null,
+    mode,
+    live: mode === "live",
+    ready: !!key && warnings.length === 0,
+    warnings,
     currency: defaultCurrency(),
     presets: PRESET_AMOUNTS,
     webhook: !!String(process.env.STRIPE_WEBHOOK_SECRET || "").trim(),
@@ -140,6 +168,14 @@ export async function createDonationSession({ amount, currency, recurring, ip, a
     : defaultCurrency();
 
   const base = publicUrl();
+
+  if (readKey()?.includes("_live_") && !base.startsWith("https://")) {
+    const err = new Error(
+      "live mode needs an https SLUGFETCH_PUBLIC_URL, stripe will not redirect real payments back to an insecure address"
+    );
+    err.status = 500;
+    throw err;
+  }
   const isSub = !!recurring;
 
   const session = await createSession(stripe, {

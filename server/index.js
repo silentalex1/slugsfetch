@@ -970,6 +970,16 @@ function listen(port, attempt = 0) {
     } catch (e) {
       console.log("[slugfetch-api] probe failed:", e?.message || e);
     }
+
+    const pay = paymentsStatus();
+    if (!pay.configured) {
+      console.log("[slugfetch-api] payments: off (no STRIPE_SECRET_KEY)");
+    } else if (pay.live) {
+      console.log("[slugfetch-api] payments: LIVE MODE, real cards will be charged");
+      for (const w of pay.warnings) console.log(`[slugfetch-api] payments warning: ${w}`);
+    } else {
+      console.log("[slugfetch-api] payments: test mode, real cards will be declined");
+    }
   });
 
   const shutdown = () => {

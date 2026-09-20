@@ -350,6 +350,9 @@ export async function checkHealth(): Promise<ServerHealth> {
 export interface PaymentsConfig {
   configured: boolean;
   mode: "test" | "live" | null;
+  live: boolean;
+  ready: boolean;
+  warnings: string[];
   currency: string;
   presets: number[];
   webhook: boolean;

@@ -1855,6 +1855,24 @@ function App() {
               </div>
             )}
 
+            {payments?.mode === "test" && (
+              <div className="mb-6 px-4 py-3 rounded-xl border border-sky-400/40 bg-sky-500/10 text-sky-700 dark:text-sky-300 text-xs leading-relaxed">
+                stripe test mode. real cards are declined here on purpose. use{" "}
+                <span className="font-mono">4242 4242 4242 4242</span> with any future expiry and any cvc.
+              </div>
+            )}
+
+            {payments?.live && payments.warnings.length > 0 && (
+              <div className="mb-6 px-4 py-3 rounded-xl border border-red-400/40 bg-red-500/10 text-red-600 dark:text-red-400 text-xs leading-relaxed">
+                <p className="font-medium mb-1">live mode is not set up correctly</p>
+                <ul className="list-disc pl-4 space-y-1">
+                  {payments.warnings.map((w) => (
+                    <li key={w}>{w}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {account && (
               <div className="mb-6 px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/50 flex items-center justify-between gap-3">
                 <p className="text-xs text-zinc-500 truncate">
