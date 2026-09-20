@@ -17,6 +17,7 @@ import { createWriteStream, writeFileSync } from "node:fs";
 import {
   runDownload,
   runRemux,
+  runSlowReverb,
   probeReady,
   TMP_DIR,
   ensureYtDlp,
@@ -323,7 +324,22 @@ async function processJob(job) {
 
   try {
     let result;
-    if (job.type === "remux") {
+    if (job.type === "slowreverb") {
+      const out = await runSlowReverb({
+        inputPath: job.inputPath,
+        outputPath: job.outputPath,
+        speed: job.speed,
+        reverb: job.reverb,
+        signal: ac.signal,
+        onProgress: (info) => {
+          patchJob(job.id, {
+            progress: info.pct ?? jobs.get(job.id)?.progress ?? 5,
+            statusText: info.status || "slowing",
+          });
+        },
+      });
+      result = { filepath: out.filepath, filename: `${job.outputBase}.mp3` };
+    } else if (job.type === "remux") {
       result = await processRemuxJob(job, ac);
     } else {
       await ensureYtDlp();
@@ -744,6 +760,51 @@ async function handle(req, res) {
         log("info", reqId, "cookies saved", { bytes: text.length });
         return json(res, 200, { ok: true, present: hasCookieFile() }, reqId);
       }
+    }
+
+    if (req.method === "POST" && path === "/api/slowreverb") {
+      const body = await readBody(req);
+      const account = body.account && body.token ? authenticate(body.account, body.token) : null;
+      if (!account) {
+        return json(res, 401, { ok: false, error: "sign in to use slow and reverb" }, reqId);
+      }
+      if (!account.premium) {
+        return json(res, 403, { ok: false, error: "slow and reverb is a premium feature, donate above $5 to unlock it" }, reqId);
+      }
+
+      const source = jobs.get(String(body.jobId || ""));
+      if (!source || source.status !== "done" || !source.filepath || !existsSync(source.filepath)) {
+        return json(res, 409, { ok: false, error: "that download is no longer available, run it again" }, reqId);
+      }
+
+      const speed = Math.min(1, Math.max(0.5, Number(body.speed) || 0.8));
+      const reverb = Math.min(1, Math.max(0, Number(body.reverb ?? 0.35)));
+      const id = randomUUID();
+      const base = safeBase(basename(source.filename || "audio").replace(/\.[^.]+$/, ""));
+      const outPath = join(TMP_DIR, `${id}__${base} (slowed).mp3`);
+
+      const job = {
+        id,
+        type: "slowreverb",
+        url: "",
+        sourceName: source.filename,
+        speed,
+        reverb,
+        inputPath: source.filepath,
+        outputPath: outPath,
+        outputBase: `${base} (slowed)`,
+        mode: "audio",
+        format: "mp3",
+        status: "queued",
+        progress: 0,
+        statusText: "queued",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        requestId: reqId,
+      };
+      enqueue(job);
+      log("info", reqId, "slow reverb queued", { id, speed, reverb, user: account.username });
+      return json(res, 201, { ok: true, ...publicJob(job) }, reqId);
     }
 
     if (req.method === "POST" && path === "/api/remux") {

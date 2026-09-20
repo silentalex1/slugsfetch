@@ -606,3 +606,32 @@ export function formatEta(sec?: number): string {
   if (m < 60) return `${m}m ${s}s`;
   return `${Math.floor(m / 60)}h ${m % 60}m`;
 }
+
+export async function startSlowReverb(opts: {
+  jobId: string;
+  speed: number;
+  reverb: number;
+  account: string;
+  token: string;
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
+  try {
+    const res = await requestApi("/slowreverb", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(opts),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) return { ok: false, error: data.error || `HTTP ${res.status}` };
+    return { ok: true, id: data.id };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "could not reach the engine" };
+  }
+}
+
+export async function pollSlowReverb(
+  jobId: string,
+  onProgress: ProgressCb,
+  signal: AbortSignal
+): Promise<DownloadResult> {
+  return pollJob(jobId, onProgress, signal);
+}

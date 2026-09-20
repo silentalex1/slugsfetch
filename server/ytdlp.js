@@ -1046,6 +1046,52 @@ function runFfmpeg(bin, args, duration, signal, onProgress) {
   });
 }
 
+export async function runSlowReverb(opts) {
+  const { inputPath, outputPath, speed, reverb, signal, onProgress } = opts;
+  const bin = await findFfmpeg({ download: true });
+  if (!bin) throw new Error("ffmpeg is not available on this server");
+  if (!existsSync(inputPath)) throw new Error("source file is missing");
+
+  const rate = Math.min(1, Math.max(0.5, Number(speed) || 0.8));
+  const wet = Math.min(1, Math.max(0, Number(reverb ?? 0.35)));
+
+  onProgress?.({ pct: 4, status: "inspecting" });
+  const info = await ffprobeInfo(inputPath);
+  if (!info.audio) throw new Error("this file has no audio track");
+
+  const delays = [37, 53, 71, 97];
+  const decays = [0.42, 0.34, 0.27, 0.21].map((d) => (d * wet).toFixed(3));
+  const echo = wet > 0.02 ? `,aecho=0.8:0.85:${delays.join("|")}:${decays.join("|")}` : "";
+  const filter = `asetrate=44100*${rate.toFixed(4)},aresample=44100,atempo=1.0${echo},alimiter=limit=0.95`;
+
+  const duration = info.duration > 0 ? info.duration / rate : 0;
+
+  await runFfmpeg(
+    bin,
+    [
+      "-hide_banner",
+      "-nostdin",
+      "-y",
+      "-progress", "pipe:1",
+      "-nostats",
+      "-i", inputPath,
+      "-vn",
+      "-af", filter,
+      "-c:a", "libmp3lame",
+      "-b:a", "192k",
+      outputPath,
+    ],
+    duration,
+    signal,
+    onProgress
+  );
+
+  if (!existsSync(outputPath) || statSync(outputPath).size < 256) {
+    throw new Error("slowing the audio produced an empty file");
+  }
+  return { filepath: outputPath, size: statSync(outputPath).size };
+}
+
 export async function runRemux(opts) {
   const { inputPath, target, outputPath, bitrate, signal, onProgress } = opts;
   const bin = await findFfmpeg({ download: true });

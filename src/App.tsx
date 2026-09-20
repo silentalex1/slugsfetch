@@ -14,6 +14,8 @@ import {
   type QueueActions,
 } from "./ui";
 import SlugLogo from "./SlugLogo";
+import { SlugsAiLauncher, SlugsAiWidget } from "./SlugsAI";
+import { type AiSettingChange } from "./ai";
 import { parseLink, platformLabel, platformBadge, extractUrls, SUPPORTED_PLATFORMS, type ParsedLink } from "./links";
 import {
   downloadMedia,
@@ -292,6 +294,7 @@ function App() {
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [confirmWipe, setConfirmWipe] = useState<null | "reset" | "clear">(null);
+  const [slugsAiOpen, setSlugsAiOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const batchFileRef = useRef<HTMLInputElement>(null);
   const cookieFileRef = useRef<HTMLInputElement>(null);
@@ -334,6 +337,54 @@ function App() {
   useEffect(() => {
     localStorage.setItem("slugfetch-settings", JSON.stringify(settings));
   }, [settings]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.shiftKey && e.key.toLowerCase() === "i") || (e.key === "?" && !e.ctrlKey && !e.metaKey)) {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+        e.preventDefault();
+        setSlugsAiOpen((v) => !v);
+      }
+      if (e.key === "Escape" && slugsAiOpen) setSlugsAiOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [slugsAiOpen]);
+
+  const slugsAiContext = useMemo(() => ({
+    username: account?.username ?? null,
+    premium: !!account?.premium,
+    theme: settings.theme,
+    quality: settings.videoQuality,
+    audioFormat: settings.audioFormat,
+    autoSave: settings.savingMethod === "download",
+    apply: (change: AiSettingChange) => {
+      if (change.kind === "theme" && (change.value === "dark" || change.value === "light")) {
+        setSettings((s) => ({ ...s, theme: change.value as Theme }));
+        return `theme → ${change.value}`;
+      }
+      if (change.kind === "quality" && typeof change.value === "string") {
+        setSettings((s) => ({ ...s, videoQuality: change.value as Quality }));
+        setQuality(change.value as Quality);
+        return `quality → ${change.value}`;
+      }
+      if (change.kind === "audioFormat" && typeof change.value === "string") {
+        setSettings((s) => ({ ...s, audioFormat: change.value as AudioFormat }));
+        setAudioFmt(change.value as AudioFormat);
+        return `audio format → ${change.value}`;
+      }
+      if (change.kind === "mobile" && change.value === true) {
+        setMobileAudio(true);
+        return "mobile audio on";
+      }
+      if (change.kind === "autoSave") {
+        setSettings((s) => ({ ...s, savingMethod: change.value ? "download" : "queue" as SavingMethod }));
+        return change.value ? "auto-save on" : "auto-save off";
+      }
+      return null;
+    },
+  }), [account, settings.theme, settings.videoQuality, settings.audioFormat, settings.savingMethod]);
 
   useEffect(() => {
     localStorage.setItem("slugfetch-bg", JSON.stringify(bg));
@@ -2274,6 +2325,8 @@ function App() {
           </div>
         )}
       </main>
+      <SlugsAiLauncher open={slugsAiOpen} onOpen={() => setSlugsAiOpen(true)} />
+      <SlugsAiWidget open={slugsAiOpen} onClose={() => setSlugsAiOpen(false)} context={slugsAiContext} />
     </div>
   );
 }
