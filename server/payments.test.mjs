@@ -96,11 +96,15 @@ test("one-time donation sends a card checkout session", async () => {
   assert.match(received[0].auth, /^Bearer sk_test_/);
   assert.equal(sent.get("mode"), "payment");
   assert.equal(sent.get("submit_type"), "donate");
+  assert.equal(sent.get("payment_method_types[0]"), "card");
   assert.equal(
-    sent.get("payment_method_types[0]"),
-    null,
-    "payment_method_types must stay unset: accounts with Managed Payments reject it"
+    sent.get("managed_payments[enabled]"),
+    "false",
+    "managed payments must stay off: it rejects payment_method_types and donation tax codes"
   );
+  assert.equal(sent.get("phone_number_collection[enabled]"), "false");
+  assert.equal(sent.get("locale"), "auto");
+  assert.match(sent.get("custom_text[submit][message]") || "", /slugfetch/);
   assert.equal(sent.get("line_items[0][price_data][unit_amount]"), "1500");
   assert.equal(sent.get("line_items[0][price_data][currency]"), "usd");
   assert.equal(sent.get("line_items[0][quantity]"), "1");

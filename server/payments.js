@@ -145,7 +145,17 @@ export async function createDonationSession({ amount, currency, recurring, ip, a
   const session = await createSession(stripe, {
     mode: isSub ? "subscription" : "payment",
     managed_payments: { enabled: false },
+    payment_method_types: ["card"],
     billing_address_collection: "auto",
+    phone_number_collection: { enabled: false },
+    locale: "auto",
+    custom_text: {
+      submit: {
+        message: isSub
+          ? "thank you for backing slugfetch every month. cancel any time."
+          : "thank you for keeping slugfetch free, fast and ad free.",
+      },
+    },
     ...(isSub ? {} : { submit_type: "donate" }),
     line_items: [
       {
