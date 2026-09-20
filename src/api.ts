@@ -42,7 +42,16 @@ type ProgressCb = (info: ProgressInfo) => void;
 function apiBase(): string {
   const stored = typeof localStorage !== "undefined" ? localStorage.getItem("slugfetch-api-base") : null;
   if (stored?.trim()) return stored.replace(/\/$/, "");
+
+  const built = import.meta.env?.VITE_API_BASE as string | undefined;
+  if (built?.trim()) return built.trim().replace(/\/$/, "");
+
   return "/api";
+}
+
+export function isLocalHost(): boolean {
+  if (typeof window === "undefined") return false;
+  return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname);
 }
 
 export function isValidMediaUrl(url: string): boolean {
@@ -90,13 +99,13 @@ async function requestApi(endpoint: string, options: RequestInit = {}): Promise<
     if (e instanceof DOMException && e.name === "AbortError") throw e;
   }
 
-  if (!base.startsWith("http")) {
+  if (!base.startsWith("http") && isLocalHost()) {
     const fallback = "http://127.0.0.1:8787/api";
     const res = await fetch(`${fallback}${endpoint}`, options);
     if (res.ok) resolvedBase = fallback;
     return res;
   }
-  throw new Error("cannot reach the slugfetch server. is it running?");
+  throw new Error("cannot reach the slugfetch engine");
 }
 
 export function fileUrlFor(jobId: string): string {

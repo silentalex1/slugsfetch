@@ -175,11 +175,27 @@ export const ConfirmDialog = memo(function ConfirmDialog({
   );
 });
 
-export const ServerBanner = memo(function ServerBanner({ health }: { health: ServerHealth | null }) {
+export const ServerBanner = memo(function ServerBanner({
+  health,
+  local,
+}: {
+  health: ServerHealth | null;
+  local?: boolean;
+}) {
   if (!health || health.ok) return null;
   return (
     <div className="mb-4 px-3.5 py-2.5 rounded-xl border border-amber-400/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs leading-relaxed">
-      can't reach the slugfetch engine. start it with <span className="font-mono">npm run dev</span>, then this banner goes away.
+      {local ? (
+        <>
+          can't reach the slugfetch engine. start it with <span className="font-mono">npm run dev</span>, then this banner
+          goes away.
+        </>
+      ) : (
+        <>
+          the download engine is offline right now, so saving and converting are paused. browsing still works and nothing
+          you have saved is lost.
+        </>
+      )}
     </div>
   );
 });

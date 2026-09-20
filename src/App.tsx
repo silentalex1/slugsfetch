@@ -20,6 +20,7 @@ import {
   isValidMediaUrl,
   saveToDisk,
   checkHealth,
+  isLocalHost,
   uploadCookies,
   clearCookies,
   getPaymentsConfig,
@@ -1089,7 +1090,7 @@ function App() {
                 <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center max-w-sm">the BEST downloadable videos and audio content.</p>
               </div>
 
-              <ServerBanner health={health} />
+              <ServerBanner health={health} local={isLocalHost()} />
 
               <div className="flex items-center justify-between mb-2">
                 <button
@@ -1397,7 +1398,7 @@ function App() {
                 </p>
               </div>
 
-              <ServerBanner health={health} />
+              <ServerBanner health={health} local={isLocalHost()} />
 
               <p className="text-xs text-zinc-500 mb-2">target format</p>
               <div className="grid grid-cols-3 gap-2 mb-4">
