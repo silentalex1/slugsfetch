@@ -10,3 +10,5 @@ server/tmp/*
 server/donations.jsonl
 server/accounts.json
 tsconfig.tsbuildinfo
+sdk/
+ai/*.log

@@ -24,8 +24,25 @@ export interface AiReply {
   action?: string;
 }
 
-const SDK_URL = "https://inferforge.org/sdk/slugsfetch.js";
-const MODEL_ENDPOINT = "https://inferforge.org/api/models/slugsfetch/chat";
+const EMBED_KEY = "sk-embed-cb1edc6f8aaa4c13ba44e8b4";
+const SDK_URL = `https://inferforge.org/sdk/slugsfetch.js?key=${EMBED_KEY}`;
+
+const SYSTEM_PROMPT = [
+  "You are Slugs AI, the slugsfetch model built by InferForge only for the slugfetch website.",
+  "You are NOT Qwen, ChatGPT, Claude, Gemini or Alibaba. Never mention Qwen or Alibaba.",
+  "Always identify yourself as Slugs AI.",
+  "Slugfetch downloads and converts media from 16 sites so users can shape audio for their slugs loading screen.",
+  "Downloading is free with no ads or trackers. Donating above five dollars unlocks premium here and on slugs.lol.",
+  "Answer in two or three short sentences, only about slugfetch.",
+].join(" ");
+
+function endpoints(): string[] {
+  const list = ["https://inferforge.org/v1/chat/completions"];
+  if (typeof window !== "undefined" && /^(localhost|127.0.0.1)$/.test(window.location.hostname)) {
+    list.unshift("http://127.0.0.1:11500/v1/chat/completions", "http://127.0.0.1:11435/v1/chat/completions");
+  }
+  return list;
+}
 
 const KNOWLEDGE: { match: RegExp; answer: (c: AiContext) => string }[] = [
   {
@@ -183,32 +200,66 @@ function loadSdk(): Promise<boolean> {
   return sdkReady;
 }
 
+function contextLine(context: AiContext): string {
+  const bits = [
+    context.username ? `The user is signed in as ${context.username}.` : "The user is not signed in.",
+    context.premium ? "They have premium." : "They do not have premium.",
+  ];
+  return bits.join(" ");
+}
+
+function cleanReply(text: string): string | null {
+  const trimmed = text.trim();
+  if (trimmed.length < 3) return null;
+  if (/\b(qwen|alibaba|openai|chatgpt|anthropic)\b/i.test(trimmed)) return null;
+  return trimmed;
+}
+
 async function remoteAnswer(question: string, context: AiContext): Promise<string | null> {
+  const body = JSON.stringify({
+    model: "slugsfetch",
+    messages: [
+      { role: "system", content: `${SYSTEM_PROMPT} ${contextLine(context)}` },
+      { role: "user", content: question },
+    ],
+    max_tokens: 160,
+    temperature: 0.3,
+  });
+
+  for (const url of endpoints()) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${EMBED_KEY}` },
+        body,
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const text = data?.choices?.[0]?.message?.content;
+      if (typeof text === "string") {
+        const cleaned = cleanReply(text);
+        if (cleaned) return cleaned;
+      }
+    } catch {
+      continue;
+    }
+  }
+
   try {
     const ok = await loadSdk();
-    const sdk = (window as unknown as Record<string, unknown>).slugsfetch as
-      | { chat?: (q: string, o?: unknown) => Promise<string | { text?: string; content?: string }> }
+    const sdk = (window as unknown as Record<string, unknown>).InferForge as
+      | { instance?: { chat?: (q: string) => Promise<string> } }
       | undefined;
-
-    if (ok && typeof sdk?.chat === "function") {
-      const raw = await sdk.chat(question, { context });
-      const text = typeof raw === "string" ? raw : raw?.text || raw?.content;
-      if (text && text.trim().length > 2) return text.trim();
+    if (ok && typeof sdk?.instance?.chat === "function") {
+      const raw = await sdk.instance.chat(`${SYSTEM_PROMPT}\n\nUser: ${question}`);
+      if (typeof raw === "string") return cleanReply(raw);
     }
-
-    const res = await fetch(MODEL_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: question, context }),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const text = data.reply || data.text || data.content || data.message;
-    return typeof text === "string" && text.trim().length > 2 ? text.trim() : null;
   } catch {
     return null;
   }
+
+  return null;
 }
 
 export async function askSlugsAI(question: string, context: AiContext): Promise<AiReply> {
@@ -216,6 +267,10 @@ export async function askSlugsAI(question: string, context: AiContext): Promise<
   if (setting && context.apply) {
     const applied = context.apply(setting.change);
     if (applied) return { text: setting.reply, action: applied };
+  }
+
+  for (const entry of KNOWLEDGE) {
+    if (entry.match.test(question)) return { text: entry.answer(context) };
   }
 
   const remote = await remoteAnswer(question, context);

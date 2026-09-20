@@ -9,13 +9,14 @@ import {
   ConfirmDialog,
   QueuePanel,
   SideNav,
+  MobileNav,
   BgCustomizer,
   type QueueItem,
   type QueueActions,
 } from "./ui";
 import SlugLogo from "./SlugLogo";
 import { SlugsAiLauncher, SlugsAiWidget } from "./SlugsAI";
-import { type AiSettingChange } from "./ai";
+import type { AiSettingChange } from "./ai";
 import { parseLink, platformLabel, platformBadge, extractUrls, SUPPORTED_PLATFORMS, type ParsedLink } from "./links";
 import {
   downloadMedia,
@@ -33,6 +34,8 @@ import {
   fetchAccount,
   loadSession,
   saveSession,
+  startSlowReverb,
+  pollSlowReverb,
   pushHistory as syncHistoryToAccount,
   clearRemoteHistory,
   formatBytes,
@@ -294,6 +297,7 @@ function App() {
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [confirmWipe, setConfirmWipe] = useState<null | "reset" | "clear">(null);
+  const [aiOpen, setAiOpen] = useState(false);
   const [slugsAiOpen, setSlugsAiOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const batchFileRef = useRef<HTMLInputElement>(null);
@@ -720,6 +724,97 @@ function App() {
     toast(`saved ${item.filename || item.name}`);
   }, [patchQueue, toast]);
 
+  const slowReverbItem = useCallback(
+    async (item: QueueItem, speed: number, reverb: number) => {
+      const session = loadSession();
+      if (!session) {
+        toast("sign in to use slow + reverb");
+        return;
+      }
+      if (!account?.premium) {
+        toast("slow + reverb is premium, donate above $5 to unlock it");
+        return;
+      }
+      const srcJob = item.fileUrl?.match(/\/jobs\/([^/]+)\/file/)?.[1];
+      if (!srcJob) {
+        toast("that download is no longer on the server, run it again");
+        return;
+      }
+      const id = crypto.randomUUID();
+      const base = (item.filename || item.name).replace(/\.[^.]+$/, "");
+      const next: QueueItem = {
+        id,
+        name: `${base} (slowed)`,
+        url: "",
+        platform: "slow + reverb",
+        kind: "audio",
+        progress: 0,
+        status: "processing",
+        statusText: "queued",
+        mode: "audio",
+      };
+      setQueue((q) => {
+        const nq = [next, ...q];
+        queueRef.current = nq;
+        return nq;
+      });
+      const controller = new AbortController();
+      abortRef.current.set(id, controller);
+      const started = await startSlowReverb({
+        jobId: srcJob,
+        speed,
+        reverb,
+        account: session.username,
+        token: session.token,
+      });
+      if (!started.ok || !started.id) {
+        abortRef.current.delete(id);
+        patchQueue(id, { status: "error", error: started.error || "could not start", statusText: "error" });
+        return;
+      }
+      const result = await pollSlowReverb(
+        started.id,
+        (info) => {
+          patchQueue(id, {
+            progress: info.pct,
+            statusText: info.status,
+            speed: info.speed,
+            eta: info.eta,
+            loaded: info.loaded,
+            total: info.total,
+            status: "processing",
+          });
+        },
+        controller.signal
+      );
+      abortRef.current.delete(id);
+      if (result.ok) {
+        const autoSave = settings.savingMethod === "download";
+        patchQueue(id, {
+          status: "done",
+          progress: 100,
+          fileUrl: result.fileUrl,
+          filename: result.filename,
+          total: result.size,
+          loaded: result.size,
+          statusText: autoSave ? "saved" : "ready",
+          speed: 0,
+          eta: 0,
+          saved: autoSave,
+        });
+        if (autoSave && result.fileUrl) {
+          saveToDisk(result.fileUrl, result.filename);
+          toast(`saved ${result.filename || next.name}`);
+        }
+      } else if (result.status === "cancelled") {
+        patchQueue(id, { status: "cancelled", progress: 0, statusText: "cancelled" });
+      } else {
+        patchQueue(id, { status: "error", error: result.error || "slowdown failed", statusText: "error" });
+      }
+    },
+    [account, patchQueue, toast, settings.savingMethod]
+  );
+
   const clearDone = useCallback(() => {
     setQueue((q) => {
       const next = q.filter((i) => i.status !== 'done' && i.status !== 'cancelled' && i.status !== 'error');
@@ -868,6 +963,52 @@ function App() {
     }
   }, [page, path, toast]);
 
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.shiftKey && (e.key === "I" || e.key === "i") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const el = e.target as HTMLElement | null;
+        if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+        e.preventDefault();
+        setAiOpen((v) => !v);
+      }
+      if (e.key === "Escape") {
+        setAiOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const applyAiSetting = useCallback((change: AiSettingChange): string | null => {
+    if (change.kind === "theme") {
+      update("theme", change.value as Theme);
+      return `theme set to ${change.value}`;
+    }
+    if (change.kind === "quality") {
+      update("videoQuality", change.value as Quality);
+      setQuality(change.value as Quality);
+      return `quality set to ${change.value}`;
+    }
+    if (change.kind === "audioFormat") {
+      update("audioFormat", change.value as AudioFormat);
+      setAudioFmt(change.value as AudioFormat);
+      return `audio format set to ${change.value}`;
+    }
+    if (change.kind === "autoSave") {
+      update("savingMethod", change.value ? "download" : "ask");
+      return change.value ? "auto download on" : "auto download off";
+    }
+    if (change.kind === "mobile") {
+      setMobileAudio(!!change.value);
+      if (change.value) {
+        setMode("audio");
+        setAudioFmt("m4a");
+      }
+      return change.value ? "mobile audio on" : "mobile audio off";
+    }
+    return null;
+  }, []);
   const runWipe = () => {
     const mode = confirmWipe;
     setConfirmWipe(null);
@@ -969,8 +1110,15 @@ function App() {
   };
 
   const queueActions = useMemo<QueueActions>(
-    () => ({ save: saveItem, pause: pauseItem, resume: resumeItem, cancel: cancelItem, remove: removeItem }),
-    [saveItem, pauseItem, resumeItem, cancelItem, removeItem]
+    () => ({
+      save: saveItem,
+      pause: pauseItem,
+      resume: resumeItem,
+      cancel: cancelItem,
+      remove: removeItem,
+      slowReverb: (item, speed, reverb) => void slowReverbItem(item, speed, reverb),
+    }),
+    [saveItem, pauseItem, resumeItem, cancelItem, removeItem, slowReverbItem]
   );
 
 
@@ -1120,9 +1268,25 @@ function App() {
     <div className="min-h-screen text-zinc-900 dark:text-zinc-100 font-sans antialiased relative">
       <Background colors={bg} />
       <SideNav page={page} onNavigate={(p) => setPage(p as Page)} />
+      <MobileNav page={page} onNavigate={(p) => setPage(p as Page)} />
+      <MobileNav page={page} onNavigate={(p) => setPage(p as Page)} />
       {topRightMenu}
       <BgCustomizer bg={bg} setBg={setBg} defaultBg={defaultBg} open={showBgPanel} setOpen={setShowBgPanel} />
       <Toasts items={toasts} />
+      <SlugsAiLauncher open={aiOpen} onOpen={() => setAiOpen(true)} />
+      <SlugsAiWidget
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        context={{
+          username: account?.username ?? null,
+          premium: !!account?.premium,
+          theme: settings.theme,
+          quality,
+          audioFormat: audioFmt,
+          autoSave: settings.savingMethod === "download",
+          apply: applyAiSetting,
+        }}
+      />
       <ConfirmDialog
         open={confirmWipe !== null}
         title="[ warning ]"
@@ -1425,7 +1589,7 @@ function App() {
                 </button>
               </div>
 
-              <QueuePanel queue={queue} actions={queueActions} onClearDone={clearDone} />
+              <QueuePanel queue={queue} actions={queueActions} onClearDone={clearDone} premium={!!account?.premium} />
 
               <div className="mt-10 text-center">
                 <button onClick={() => navigate("/about/terms")} className="text-xs text-zinc-400 dark:text-zinc-500 underline underline-offset-4 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
@@ -1502,7 +1666,7 @@ function App() {
                 </p>
               )}
 
-              <QueuePanel queue={queue} actions={queueActions} onClearDone={clearDone} title="conversion queue" />
+              <QueuePanel queue={queue} actions={queueActions} onClearDone={clearDone} title="conversion queue" premium={!!account?.premium} />
 
               <div className="mt-8 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
                 <div className="px-3 py-2 bg-zinc-100/80 dark:bg-zinc-900/80 text-xs font-medium">conversion matrix</div>

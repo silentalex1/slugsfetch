@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from "react";
+import { memo, useState, type ReactNode } from "react";
 import { formatBytes, formatSpeed, formatEta, type ServerHealth } from "./api";
 import type { BgColors } from "./Background";
 
@@ -39,6 +39,7 @@ export interface QueueActions {
   resume: (id: string) => void;
   cancel: (id: string) => void;
   remove: (id: string) => void;
+  slowReverb?: (item: QueueItem, speed: number, reverb: number) => void;
 }
 
 export const Toggle = memo(function Toggle({
@@ -200,9 +201,24 @@ export const ServerBanner = memo(function ServerBanner({
   );
 });
 
-export const QueueCard = memo(function QueueCard({ item, actions }: { item: QueueItem; actions: QueueActions }) {
+export const QueueCard = memo(function QueueCard({
+  item,
+  actions,
+  premium,
+}: {
+  item: QueueItem;
+  actions: QueueActions;
+  premium?: boolean;
+}) {
   const busy = item.status === "processing" || item.status === "queued";
   const pct = Math.max(item.status === "queued" ? 0 : 2, Math.min(100, item.progress));
+  const [reverbOpen, setReverbOpen] = useState(false);
+  const [reverbSpeed, setReverbSpeed] = useState(0.8);
+  const [reverbAmount, setReverbAmount] = useState(0.35);
+  const isAudio =
+    item.kind === "audio" ||
+    item.mode === "audio" ||
+    /\.(mp3|m4a|wav|ogg|opus|flac)$/i.test(item.filename || item.name);
 
   return (
     <div
@@ -281,6 +297,25 @@ export const QueueCard = memo(function QueueCard({ item, actions }: { item: Queu
             >
               {item.saved ? "save again" : "save"}
             </button>
+            {isAudio && actions.slowReverb && (
+              <button
+                onClick={() => setReverbOpen((v) => !v)}
+                className={cn(
+                  "px-3 py-1 rounded-lg text-xs font-medium inline-flex items-center gap-1.5 transition-all duration-150",
+                  reverbOpen
+                    ? "bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-400 ring-1 ring-fuchsia-500/40"
+                    : "bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300"
+                )}
+              >
+                slow + reverb
+                {!premium && (
+                  <svg className="w-3 h-3 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <rect x="5" y="10" width="14" height="10" rx="2" strokeWidth={2} />
+                    <path strokeLinecap="round" strokeWidth={2} d="M8 10V7a4 4 0 018 0v3" />
+                  </svg>
+                )}
+              </button>
+            )}
             <button
               onClick={() => actions.remove(item.id)}
               className="px-3 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-xs transition-colors"
@@ -326,6 +361,60 @@ export const QueueCard = memo(function QueueCard({ item, actions }: { item: Queu
           </>
         )}
       </div>
+
+      {reverbOpen && item.status === "done" && isAudio && actions.slowReverb && (
+        <div className="mt-3 p-3 rounded-xl border border-fuchsia-500/25 bg-fuchsia-500/5 dark:bg-fuchsia-500/10 space-y-3">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300">speed</p>
+              <span className="text-[10px] text-zinc-400 tabular-nums">{Math.round(reverbSpeed * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min={0.5}
+              max={1}
+              step={0.05}
+              value={reverbSpeed}
+              onChange={(e) => setReverbSpeed(Number(e.target.value))}
+              className="w-full h-1.5 accent-fuchsia-500"
+              aria-label="slowdown speed"
+            />
+            <div className="flex justify-between text-[9px] text-zinc-400">
+              <span>slower</span>
+              <span>normal</span>
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-[11px] font-medium text-zinc-600 dark:text-zinc-300">reverb</p>
+              <span className="text-[10px] text-zinc-400 tabular-nums">{Math.round(reverbAmount * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={reverbAmount}
+              onChange={(e) => setReverbAmount(Number(e.target.value))}
+              className="w-full h-1.5 accent-fuchsia-500"
+              aria-label="reverb amount"
+            />
+            <div className="flex justify-between text-[9px] text-zinc-400">
+              <span>dry</span>
+              <span>wet</span>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              actions.slowReverb?.(item, reverbSpeed, reverbAmount);
+              setReverbOpen(false);
+            }}
+            className="w-full h-8 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 active:scale-[0.98] text-white text-xs font-medium transition-all"
+          >
+            {premium ? "make slowed + reverb" : "premium only · donate to unlock"}
+          </button>
+        </div>
+      )}
     </div>
   );
 });
@@ -335,11 +424,13 @@ export const QueuePanel = memo(function QueuePanel({
   actions,
   onClearDone,
   title = "processing queue",
+  premium,
 }: {
   queue: QueueItem[];
   actions: QueueActions;
   onClearDone: () => void;
   title?: string;
+  premium?: boolean;
 }) {
   if (queue.length === 0) return null;
   const active = queue.filter((i) => i.status === "processing" || i.status === "queued").length;
@@ -361,7 +452,7 @@ export const QueuePanel = memo(function QueuePanel({
       </div>
       <div className="space-y-2">
         {queue.map((item) => (
-          <QueueCard key={item.id} item={item} actions={actions} />
+          <QueueCard key={item.id} item={item} actions={actions} premium={premium} />
         ))}
       </div>
     </div>
@@ -566,3 +657,74 @@ export const BgCustomizer = memo(function BgCustomizer({
     </div>
   );
 });
+
+export function MobileNav({
+  page,
+  onNavigate,
+}: {
+  page: string;
+  onNavigate: (p: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const items: [string, string][] = [
+    ["save", "save"],
+    ["remux", "remux"],
+    ["history", "history"],
+    ["settings", "settings"],
+    ["donate", "donation"],
+    ["updates", "updates"],
+    ["about", "about"],
+  ];
+  const nav = (p: string) => {
+    onNavigate(p);
+    setOpen(false);
+  };
+  return (
+    <div className="lg:hidden fixed bottom-4 left-4 z-40">
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute bottom-14 left-0 z-50 w-44 max-w-[calc(100vw-5rem)] rounded-2xl border border-zinc-200/80 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur shadow-xl overflow-hidden">
+            {items.map(([it, label], i) => (
+              <button
+                key={it}
+                onClick={() => nav(it)}
+                className={cn(
+                  "w-full text-left px-4 py-2.5 transition-colors",
+                  i > 0 && "border-t border-zinc-100 dark:border-zinc-800/60",
+                  page === it
+                    ? "bg-zinc-100 dark:bg-zinc-800"
+                    : "hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                )}
+              >
+                <span
+                  className={cn(
+                    "block text-sm",
+                    page === it
+                      ? "font-semibold text-zinc-900 dark:text-zinc-50"
+                      : "font-medium text-zinc-700 dark:text-zinc-300"
+                  )}
+                >
+                  {label}
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "relative z-50 w-11 h-11 rounded-full border shadow-lg flex items-center justify-center text-lg font-bold tracking-tighter transition-all active:scale-95",
+          open
+            ? "bg-zinc-900 text-white border-zinc-900 dark:bg-white dark:text-zinc-900 dark:border-white"
+            : "bg-white/95 dark:bg-zinc-950/95 border-zinc-200/80 dark:border-zinc-800 text-zinc-700 dark:text-zinc-200 backdrop-blur"
+        )}
+        aria-label="menu"
+        aria-expanded={open}
+      >
+        =
+      </button>
+    </div>
+  );
+}
