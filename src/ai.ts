@@ -133,7 +133,7 @@ const KNOWLEDGE: { match: RegExp; answer: (c: AiContext) => string }[] = [
       "slugs.lol is the sister site. Premium on slugfetch gives you premium there too, and the audio you make here is meant to be used as your slugs startup loading screen sound.",
   },
   {
-    match: /^(hi|hey|hello|yo|sup)\b|who are you|what can you do|help/i,
+    match: /^\s*(hi+|hey+|hell+o+|yo+|sup+|heya+|hiya+|howdy|greetings|good (morning|afternoon|evening))\b|^\s*(gm|wsp|wassup|whats up|what's up)\b|who are you|what can you do|what are you|your name|help/i,
     answer: () =>
       "Hey, I am Slugs AI. I can explain how slugfetch works, check whether you have premium, change your settings for you, and help sort out a download that is not cooperating.\n\nWhat do you need?",
   },
