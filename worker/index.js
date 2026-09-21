@@ -33,6 +33,24 @@ export default {
 
     const origin = env.SLUGFETCH_PUBLIC_URL || url.origin;
 
+    const engine = String(env.SLUGFETCH_ENGINE_URL || "").trim().replace(/\/$/, "");
+    if (engine) {
+      const target = new URL(url.pathname + url.search, engine);
+      const forwarded = new Request(target, request);
+      forwarded.headers.set("X-Slugfetch-Origin", origin);
+      try {
+        const res = await fetch(forwarded);
+        const out = new Response(res.body, res);
+        for (const [k, v] of Object.entries(CORS)) out.headers.set(k, v);
+        return out;
+      } catch {
+        return new Response(
+          JSON.stringify({ ok: false, error: "the download engine is unreachable, try again shortly" }),
+          { status: 503, headers: { ...CORS, "Content-Type": "application/json; charset=utf-8" } }
+        );
+      }
+    }
+
     try {
       const container = env.SLUGFETCH_API.getByName("api");
       await container.startAndWaitForPorts({

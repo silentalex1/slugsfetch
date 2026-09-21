@@ -9,6 +9,9 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
   },
+  "vars": {
+    "SLUGFETCH_ENGINE_URL": "https://undo-administrator-waters-harold.trycloudflare.com"
+  },
   "containers": [
     {
       "class_name": "SlugfetchApi",
