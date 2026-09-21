@@ -858,5 +858,37 @@
  {
   "input": "do you know slugfetch",
   "output": "Of course, I am Slugs AI, built for it. Slugfetch downloads and converts media from 16 sites so you can shape audio for your slugs loading screen."
+ },
+ {
+  "input": "What is slugs?",
+  "output": "Slugs is an mp3 music downloader. It converts music into whatever formats your device supports, so a track plays on your phone, desktop or anywhere else without extra software."
+ },
+ {
+  "input": "whats slugs",
+  "output": "An mp3 music downloader. It converts music into any format your device supports so it just plays."
+ },
+ {
+  "input": "tell me about slugs",
+  "output": "Slugs is an mp3 music downloader. You give it music and it converts to whatever your device handles, phone or desktop. Slugfetch adds 16 sites, video, remuxing, trimming and slow and reverb."
+ },
+ {
+  "input": "explain slugs",
+  "output": "Slugs downloads mp3 music and converts it to the formats your device supports. Slugfetch is the same idea with more tools and more sites."
+ },
+ {
+  "input": "what does slugs do",
+  "output": "It downloads music as mp3 and converts it into whatever your device can play, so you never end up with a file that will not open."
+ },
+ {
+  "input": "is slugs the same as slugfetch",
+  "output": "They are related. Slugs is the mp3 music downloader and converter. Slugfetch is the fuller toolkit with 16 sites, video, remuxing and slow and reverb, and premium carries across to slugs.lol."
+ },
+ {
+  "input": "difference between slugs and slugfetch",
+  "output": "Slugs focuses on mp3 music and device compatible conversion. Slugfetch covers 16 platforms, video as well as audio, remuxing, trimming and premium extras."
+ },
+ {
+  "input": "what formats does slugs support",
+  "output": "Whatever your device can play. Slugs converts music into device compatible formats, and slugfetch covers mp3, m4a, ogg, wav, opus and flac plus mp4, webm and mkv for video."
  }
 ]

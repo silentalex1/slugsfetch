@@ -123,6 +123,11 @@ const KNOWLEDGE: { match: RegExp; answer: (c: AiContext) => string }[] = [
       "Your password is hashed before it is stored and never kept in plain text. Card details go straight to Stripe on their own page, so slugfetch never sees them. No ads, no trackers.",
   },
   {
+    match: /what (is|are) slugs\b|who (is|are) slugs\b|explain slugs\b|tell me about slugs\b/i,
+    answer: () =>
+      "Slugs is an mp3 music downloader. It lets you convert music into whatever formats your device actually supports, so a track works on your phone, desktop or anything else without hunting for a converter.\n\nSlugfetch is the same idea with the full toolkit: 16 sites, video as well as audio, remuxing, trimming and slow and reverb.",
+  },
+  {
     match: /slugs\.lol|slugs lol|sister site/i,
     answer: () =>
       "slugs.lol is the sister site. Premium on slugfetch gives you premium there too, and the audio you make here is meant to be used as your slugs startup loading screen sound.",
