@@ -13,7 +13,7 @@ export function SlugsAiLauncher({ onOpen, open }: { onOpen: () => void; open: bo
     <button
       onClick={onOpen}
       aria-label="open Slugs AI"
-      title="Slugs AI  ·  shift + i"
+      title="Slugs AI  ·  shift + i  or  shift + s"
       className={cn(
         "fixed right-4 bottom-20 z-50 w-12 h-12 rounded-full grid place-items-center",
         "bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-lg shadow-emerald-500/30",

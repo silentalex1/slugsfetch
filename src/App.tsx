@@ -966,7 +966,7 @@ function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.shiftKey && (e.key === "I" || e.key === "i") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (e.shiftKey && /^[isIS]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey) {
         const el = e.target as HTMLElement | null;
         if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
         e.preventDefault();
