@@ -176,8 +176,23 @@ function localAnswer(question: string, context: AiContext): AiReply {
     if (entry.match.test(question)) return { text: entry.answer(context) };
   }
 
+  const math = question.match(/(-?\d+(?:\.\d+)?)\s*([+\-*/x×])\s*(-?\d+(?:\.\d+)?)/);
+  if (math) {
+    const a = Number(math[1]);
+    const b = Number(math[3]);
+    const op = math[2];
+    const value =
+      op === "+" ? a + b : op === "-" ? a - b : op === "/" ? (b === 0 ? null : a / b) : a * b;
+    if (value !== null && Number.isFinite(value)) {
+      return {
+        text: `That is ${Number(value.toFixed(6))}. I am Slugs AI though, so what I am really good at is slugfetch. Want a hand downloading something, or shall I check your premium?`,
+      };
+    }
+  }
+
+  const topic = question.trim().replace(/[?!.]+$/, "").slice(0, 60);
   return {
-    text: "I am not sure about that one. I can help with how to use slugfetch, whether it is free, what it is for, premium and accounts, settings, and downloads that fail.\n\nTry one of the buttons, or ask me to change a setting like dark mode or 4K.",
+    text: `${topic ? `"${topic}" is outside what I cover.` : "That is outside what I cover."} I am Slugs AI, so I stick to slugfetch: downloading and converting from 16 sites, premium and slugs.lol, accounts, settings and fixing failed downloads.\n\nTell me what you are trying to grab and I will walk you through it.`,
   };
 }
 
@@ -208,10 +223,25 @@ function contextLine(context: AiContext): string {
   return bits.join(" ");
 }
 
-function cleanReply(text: string): string | null {
+const SLUG_TERMS =
+  /slug|download|convert|remux|premium|donat|account|mp3|m4a|mp4|audio|video|format|history|setting|youtube|spotify|tiktok|reverb|mobile|subtitle|queue|stripe/i;
+
+const TIE_BACKS = [
+  "Back on slugfetch though, want me to help you grab or convert something?",
+  "That aside, I am Slugs AI, so tell me what you want to download and I will sort it.",
+  "Anyway, slugfetch is my thing. Need a hand with a download, premium or your settings?",
+];
+
+function cleanReply(text: string, question: string): string | null {
   const trimmed = text.trim();
-  if (trimmed.length < 3) return null;
-  if (/\b(qwen|alibaba|openai|chatgpt|anthropic)\b/i.test(trimmed)) return null;
+  if (trimmed.length < 2) return null;
+  if (/\b(qwen|alibaba|openai|chatgpt|anthropic|bert|meta ai|llama)\b/i.test(trimmed)) return null;
+  if (/\b(architecture|transformer|neural network|training data|corpus|parameters)\b/i.test(trimmed)) return null;
+
+  if (!SLUG_TERMS.test(trimmed) && !SLUG_TERMS.test(question)) {
+    const tie = TIE_BACKS[Math.floor(Math.random() * TIE_BACKS.length)];
+    return `${trimmed}\n\n${tie}`;
+  }
   return trimmed;
 }
 
@@ -238,7 +268,7 @@ async function remoteAnswer(question: string, context: AiContext): Promise<strin
       const data = await res.json();
       const text = data?.choices?.[0]?.message?.content;
       if (typeof text === "string") {
-        const cleaned = cleanReply(text);
+        const cleaned = cleanReply(text, question);
         if (cleaned) return cleaned;
       }
     } catch {
@@ -253,7 +283,7 @@ async function remoteAnswer(question: string, context: AiContext): Promise<strin
       | undefined;
     if (ok && typeof sdk?.instance?.chat === "function") {
       const raw = await sdk.instance.chat(`${SYSTEM_PROMPT}\n\nUser: ${question}`);
-      if (typeof raw === "string") return cleanReply(raw);
+      if (typeof raw === "string") return cleanReply(raw, question);
     }
   } catch {
     return null;
