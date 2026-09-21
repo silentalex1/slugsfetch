@@ -72,7 +72,7 @@ export function SlugsAiWidget({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[65] sm:inset-auto sm:right-4 sm:bottom-4 sm:w-[380px] flex flex-col">
+    <div data-slugs-ai className="fixed inset-0 z-[65] sm:inset-auto sm:right-4 sm:bottom-4 sm:w-[380px] flex flex-col">
       <div
         onClick={onClose}
         className="absolute inset-0 bg-zinc-950/50 backdrop-blur-sm sm:hidden"
